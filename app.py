@@ -23,77 +23,130 @@ _cached_notes = []
 _last_fetch_time = 0
 _feed_source = "fresh"
 
+def get_db_connection():
+    db_url = os.environ.get('DATABASE_URL')
+    if db_url:
+        import psycopg2
+        # Replace postgres:// with postgresql:// if needed (psycopg2 requires postgresql://)
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+        return psycopg2.connect(db_url), "%s"
+    else:
+        import sqlite3
+        return sqlite3.connect(DB_FILE), "?"
+
 def init_db():
+    conn, p = get_db_connection()
     try:
-        with sqlite3.connect(DB_FILE) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS release_notes (
-                    id TEXT PRIMARY KEY,
-                    date TEXT,
-                    raw_date TEXT,
-                    category TEXT,
-                    content TEXT,
-                    link TEXT,
-                    fetched_at REAL
-                )
-            ''')
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS cache_metadata (
-                    key TEXT PRIMARY KEY,
-                    value TEXT
-                )
-            ''')
-            conn.commit()
+        cursor = conn.cursor()
+        
+        # Use VARCHAR/TEXT types compatible with both sqlite3 and psycopg2
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS release_notes (
+                id VARCHAR(255) PRIMARY KEY,
+                date TEXT,
+                raw_date VARCHAR(100),
+                category VARCHAR(100),
+                content TEXT,
+                link TEXT,
+                fetched_at REAL
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cache_metadata (
+                key VARCHAR(100) PRIMARY KEY,
+                value TEXT
+            )
+        ''')
+        conn.commit()
     except Exception as e:
-        print(f"Error initializing SQLite database: {e}")
+        print(f"Error initializing database: {e}")
+    finally:
+        conn.close()
 
 def save_notes_to_db(notes, source_type="fresh"):
+    conn, p = get_db_connection()
     try:
-        with sqlite3.connect(DB_FILE) as conn:
-            cursor = conn.cursor()
-            current_time = time.time()
-            for note in notes:
-                cursor.execute('''
-                    INSERT OR REPLACE INTO release_notes (id, date, raw_date, category, content, link, fetched_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (note['id'], note['date'], note['raw_date'], note['category'], note['content'], note['link'], current_time))
+        cursor = conn.cursor()
+        current_time = time.time()
+        
+        # Determine UPSERT syntax based on connection parameter marker
+        if p == "%s":  # PostgreSQL (Neon)
+            query = '''
+                INSERT INTO release_notes (id, date, raw_date, category, content, link, fetched_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    date = EXCLUDED.date,
+                    raw_date = EXCLUDED.raw_date,
+                    category = EXCLUDED.category,
+                    content = EXCLUDED.content,
+                    link = EXCLUDED.link,
+                    fetched_at = EXCLUDED.fetched_at
+            '''
+            meta_query = '''
+                INSERT INTO cache_metadata (key, value)
+                VALUES (%s, %s)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+            '''
+        else:  # SQLite (Local Dev)
+            query = '''
+                INSERT OR REPLACE INTO release_notes (id, date, raw_date, category, content, link, fetched_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            '''
+            meta_query = '''
+                INSERT OR REPLACE INTO cache_metadata (key, value)
+                VALUES (?, ?)
+            '''
             
-            cursor.execute('''
-                INSERT OR REPLACE INTO cache_metadata (key, value)
-                VALUES (?, ?)
-            ''', ('last_fetch_time', str(current_time)))
-            cursor.execute('''
-                INSERT OR REPLACE INTO cache_metadata (key, value)
-                VALUES (?, ?)
-            ''', ('feed_source', source_type))
-            conn.commit()
+        for note in notes:
+            cursor.execute(query, (note['id'], note['date'], note['raw_date'], note['category'], note['content'], note['link'], current_time))
+            
+        cursor.execute(meta_query, ('last_fetch_time', str(current_time)))
+        cursor.execute(meta_query, ('feed_source', source_type))
+        conn.commit()
     except Exception as e:
         print(f"Error saving release notes to database: {e}")
+    finally:
+        conn.close()
 
 def load_notes_from_db():
-    if not os.path.exists(DB_FILE):
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url and not os.path.exists(DB_FILE):
         return [], 0, "error"
+        
+    conn, p = get_db_connection()
     try:
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM release_notes ORDER BY raw_date DESC')
-            rows = cursor.fetchall()
-            notes = [dict(row) for row in rows]
+        cursor = conn.cursor()
+        # Query order by raw_date desc
+        cursor.execute('SELECT id, date, raw_date, category, content, link FROM release_notes ORDER BY raw_date DESC')
+        rows = cursor.fetchall()
+        
+        # Map values by tuple index to remain database driver agnostic
+        notes = []
+        for row in rows:
+            notes.append({
+                'id': row[0],
+                'date': row[1],
+                'raw_date': row[2],
+                'category': row[3],
+                'content': row[4],
+                'link': row[5]
+            })
             
-            cursor.execute('SELECT value FROM cache_metadata WHERE key = ?', ('last_fetch_time',))
-            row = cursor.fetchone()
-            last_fetch_time = float(row[0]) if row else 0.0
-            
-            cursor.execute('SELECT value FROM cache_metadata WHERE key = ?', ('feed_source',))
-            row = cursor.fetchone()
-            feed_source = row[0] if row else "db_cache"
-            
-            return notes, last_fetch_time, feed_source
+        cursor.execute(f"SELECT value FROM cache_metadata WHERE key = {p}", ('last_fetch_time',))
+        row = cursor.fetchone()
+        last_fetch_time = float(row[0]) if row else 0.0
+        
+        cursor.execute(f"SELECT value FROM cache_metadata WHERE key = {p}", ('feed_source',))
+        row = cursor.fetchone()
+        feed_source = row[0] if row else "db_cache"
+        
+        return notes, last_fetch_time, feed_source
     except Exception as e:
-        print(f"Error loading from SQLite: {e}")
+        print(f"Error loading from database: {e}")
         return [], 0, "error"
+    finally:
+        conn.close()
 
 def parse_feed_xml(xml_content):
     root = ET.fromstring(xml_content)
