@@ -1201,3 +1201,238 @@ a:hover {
     opacity: 0;
   }
 }
+
+/* ==========================================================================
+   Mobile Responsive & Usability Enhancements
+   ========================================================================== */
+
+/* Toggle Buttons (Hidden by default on Desktop) */
+.filter-toggle-btn {
+  display: none;
+}
+
+.close-sidebar-btn {
+  display: none;
+}
+
+/* Sidebar Overlay */
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(3, 7, 18, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-normal);
+}
+
+.sidebar-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* --- Media Queries --- */
+
+/* Tablet Layout (<= 1024px) */
+@media (max-width: 1024px) {
+  .app-main {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  /* Show Filter Button */
+  .filter-toggle-btn {
+    display: inline-flex !important;
+  }
+
+  /* Transform Sidebar into Overlay Drawer */
+  .filters-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: min(320px, 85vw);
+    z-index: 1000;
+    background: var(--bg-surface);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-right: 1px solid var(--border-color);
+    border-radius: 0 !important;
+    transform: translateX(-100%);
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow-lg);
+    overflow-y: auto;
+    padding: 2.5rem 1.5rem 1.5rem 1.5rem;
+  }
+
+  .filters-sidebar.active {
+    transform: translateX(0);
+  }
+
+  /* Show Sidebar Close Button */
+  .close-sidebar-btn {
+    display: block;
+    position: absolute;
+    top: 0.75rem;
+    right: 1rem;
+    background: transparent;
+    border: none;
+    font-size: 2rem;
+    line-height: 1;
+    color: var(--text-muted);
+    cursor: pointer;
+    z-index: 1002;
+    transition: color var(--transition-fast);
+  }
+
+  .close-sidebar-btn:hover {
+    color: var(--text-primary);
+  }
+
+  /* Ensure sidebar contents fit nicely */
+  .sidebar-sticky {
+    position: static;
+    gap: 1.25rem;
+  }
+}
+
+/* Mobile Layout (<= 768px) */
+@media (max-width: 768px) {
+  .app-container {
+    padding: 1rem;
+    gap: 1.25rem;
+  }
+
+  .app-header {
+    gap: 1.25rem;
+  }
+
+  .header-content {
+    gap: 1rem;
+  }
+
+  /* Compact metrics for mobile screen spaces */
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .metric-card {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    gap: 0.75rem;
+  }
+
+  .metric-icon-box {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+  }
+
+  .metric-icon-box svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .metric-value {
+    font-size: var(--text-lg);
+  }
+
+  .metric-label {
+    font-size: 9px;
+    letter-spacing: 0.2px;
+  }
+}
+
+/* Small Devices (<= 576px) */
+@media (max-width: 576px) {
+  /* Logo adjustments */
+  .logo-area {
+    gap: 0.75rem;
+  }
+
+  .bq-logo {
+    width: 40px;
+    height: 40px;
+  }
+
+  .main-title {
+    font-size: var(--text-xl);
+  }
+
+  .subtitle {
+    font-size: 11px;
+  }
+
+  /* Convert header buttons to compact icons to prevent overflow */
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  .header-actions button span {
+    display: none; /* Hide text, keep only icon */
+  }
+
+  .header-actions button {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .header-actions button svg {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+  }
+
+  /* Timeline adjustments */
+  .timeline-container {
+    padding-left: 1.25rem;
+  }
+
+  .timeline-line {
+    left: 2px;
+  }
+
+  .timeline-card {
+    padding: 1.25rem 1rem;
+    gap: 0.5rem;
+  }
+
+  .card-dot {
+    left: -1.25rem;
+    margin-left: -5px;
+    top: 1.25rem;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .card-actions {
+    width: 100%;
+    justify-content: flex-start;
+    border-top: 1px dashed var(--border-color);
+    padding-top: 0.5rem;
+    margin-top: 0.25rem;
+  }
+}
+
+/* Accessibility Focus Styling */
+.card-action-btn:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--color-google-blue);
+  outline-offset: 2px;
+}

@@ -39,6 +39,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const cacheStatusCard = document.getElementById('cacheStatusCard');
   const timelineFeed = document.getElementById('timelineFeed');
   const toastContainer = document.getElementById('toastContainer');
+  
+  // Mobile Sidebar elements
+  const filterToggleBtn = document.getElementById('filterToggleBtn');
+  const closeSidebarBtn = document.getElementById('closeSidebarBtn');
+  const filtersSidebar = document.getElementById('filtersSidebar');
+  const sidebarOverlay = document.getElementById('sidebarOverlay');
 
   // --- Core Initialization ---
   initTheme();
@@ -526,6 +532,33 @@ document.addEventListener('DOMContentLoaded', () => {
       state.filters.sort = e.target.value;
       renderTimeline();
     });
+
+    // Mobile Sidebar Toggles
+    if (filterToggleBtn) {
+      filterToggleBtn.addEventListener('click', () => {
+        filtersSidebar.classList.add('active');
+        sidebarOverlay.classList.add('active');
+        document.body.style.overflow = 'hidden'; // Prevent scrolling background page
+      });
+    }
+
+    const closeMobileSidebar = () => {
+      if (filtersSidebar) filtersSidebar.classList.remove('active');
+      if (sidebarOverlay) sidebarOverlay.classList.remove('active');
+      document.body.style.overflow = ''; // Restore scrolling
+    };
+
+    if (closeSidebarBtn) {
+      closeSidebarBtn.addEventListener('click', closeMobileSidebar);
+    }
+
+    if (sidebarOverlay) {
+      sidebarOverlay.addEventListener('click', closeMobileSidebar);
+    }
+
+    // Close mobile sidebar on tab change
+    tabTimeline.addEventListener('click', closeMobileSidebar);
+    tabBookmarks.addEventListener('click', closeMobileSidebar);
   }
 
   // --- Utility Functions ---
