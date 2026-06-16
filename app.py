@@ -8,8 +8,14 @@ from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 
-DB_FILE = os.path.join(os.path.dirname(__file__), 'release_notes.db')
-CACHE_FILE = os.path.join(os.path.dirname(__file__), 'cache.xml')
+# Adapt file paths dynamically for Vercel's writeable /tmp directory
+if os.environ.get('VERCEL'):
+    DB_FILE = '/tmp/release_notes.db'
+    CACHE_FILE = '/tmp/cache.xml'
+else:
+    DB_FILE = os.path.join(os.path.dirname(__file__), 'release_notes.db')
+    CACHE_FILE = os.path.join(os.path.dirname(__file__), 'cache.xml')
+
 CACHE_TIMEOUT = 600  # 10 minutes
 
 # In-memory store
