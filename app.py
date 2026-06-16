@@ -3,10 +3,12 @@ import re
 import time
 import requests
 import xml.etree.ElementTree as ET
+import sqlite3
 from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 
+DB_FILE = os.path.join(os.path.dirname(__file__), 'release_notes.db')
 CACHE_FILE = os.path.join(os.path.dirname(__file__), 'cache.xml')
 CACHE_TIMEOUT = 600  # 10 minutes
 
@@ -14,6 +16,78 @@ CACHE_TIMEOUT = 600  # 10 minutes
 _cached_notes = []
 _last_fetch_time = 0
 _feed_source = "fresh"
+
+def init_db():
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS release_notes (
+                    id TEXT PRIMARY KEY,
+                    date TEXT,
+                    raw_date TEXT,
+                    category TEXT,
+                    content TEXT,
+                    link TEXT,
+                    fetched_at REAL
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS cache_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            ''')
+            conn.commit()
+    except Exception as e:
+        print(f"Error initializing SQLite database: {e}")
+
+def save_notes_to_db(notes, source_type="fresh"):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            current_time = time.time()
+            for note in notes:
+                cursor.execute('''
+                    INSERT OR REPLACE INTO release_notes (id, date, raw_date, category, content, link, fetched_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (note['id'], note['date'], note['raw_date'], note['category'], note['content'], note['link'], current_time))
+            
+            cursor.execute('''
+                INSERT OR REPLACE INTO cache_metadata (key, value)
+                VALUES (?, ?)
+            ''', ('last_fetch_time', str(current_time)))
+            cursor.execute('''
+                INSERT OR REPLACE INTO cache_metadata (key, value)
+                VALUES (?, ?)
+            ''', ('feed_source', source_type))
+            conn.commit()
+    except Exception as e:
+        print(f"Error saving release notes to database: {e}")
+
+def load_notes_from_db():
+    if not os.path.exists(DB_FILE):
+        return [], 0, "error"
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM release_notes ORDER BY raw_date DESC')
+            rows = cursor.fetchall()
+            notes = [dict(row) for row in rows]
+            
+            cursor.execute('SELECT value FROM cache_metadata WHERE key = ?', ('last_fetch_time',))
+            row = cursor.fetchone()
+            last_fetch_time = float(row[0]) if row else 0.0
+            
+            cursor.execute('SELECT value FROM cache_metadata WHERE key = ?', ('feed_source',))
+            row = cursor.fetchone()
+            feed_source = row[0] if row else "db_cache"
+            
+            return notes, last_fetch_time, feed_source
+    except Exception as e:
+        print(f"Error loading from SQLite: {e}")
+        return [], 0, "error"
 
 def parse_feed_xml(xml_content):
     root = ET.fromstring(xml_content)
@@ -59,37 +133,62 @@ def get_release_notes(force=False):
     global _cached_notes, _last_fetch_time, _feed_source
     current_time = time.time()
     
-    # If forced, or cache expired, or empty in-memory cache
-    if force or not _cached_notes or (current_time - _last_fetch_time > CACHE_TIMEOUT):
-        url = "https://docs.cloud.google.com/feeds/bigquery-release-notes.xml"
-        try:
-            response = requests.get(url, timeout=10)
-            if response.status_code == 200:
-                with open(CACHE_FILE, 'wb') as f:
-                    f.write(response.content)
-                _cached_notes = parse_feed_xml(response.content)
-                _last_fetch_time = current_time
-                _feed_source = "fresh"
-                return _cached_notes
-        except Exception as e:
-            print(f"Error fetching live feed: {e}")
-        
-        # Load from file cache if offline or fetch failed
+    # Initialize the database if it hasn't been set up yet
+    init_db()
+    
+    # Check if memory cache is valid
+    if not force and _cached_notes and (current_time - _last_fetch_time <= CACHE_TIMEOUT):
+        return _cached_notes
+
+    # If cache expired or forced, try to fetch from Google XML Feed
+    url = "https://docs.cloud.google.com/feeds/bigquery-release-notes.xml"
+    fetch_success = False
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            parsed_items = parse_feed_xml(response.content)
+            save_notes_to_db(parsed_items, "fresh")
+            
+            # Backup raw XML file cache as well
+            with open(CACHE_FILE, 'wb') as f:
+                f.write(response.content)
+                
+            _cached_notes = parsed_items
+            _last_fetch_time = current_time
+            _feed_source = "fresh"
+            fetch_success = True
+            return _cached_notes
+    except Exception as e:
+        print(f"Error fetching live feed: {e}")
+    
+    # Fallback Tier 1: SQLite Database cache
+    if not fetch_success:
+        db_notes, db_fetch_time, db_source = load_notes_from_db()
+        if db_notes:
+            _cached_notes = db_notes
+            _last_fetch_time = db_fetch_time
+            _feed_source = "db_cache"
+            return _cached_notes
+            
+        # Fallback Tier 2: Read from backup cache.xml (legacy migration path)
         if os.path.exists(CACHE_FILE):
             try:
                 with open(CACHE_FILE, 'rb') as f:
                     content = f.read()
-                _cached_notes = parse_feed_xml(content)
-                _feed_source = "file_cache"
-                if _last_fetch_time == 0:
-                    _last_fetch_time = os.path.getmtime(CACHE_FILE)
+                parsed_items = parse_feed_xml(content)
+                save_notes_to_db(parsed_items, "db_cache")
+                
+                _cached_notes = parsed_items
+                _last_fetch_time = os.path.getmtime(CACHE_FILE)
+                _feed_source = "db_cache"
                 return _cached_notes
             except Exception as e:
                 print(f"Error reading file cache: {e}")
                 
+        # If both database and file caches are empty or fail
         if not _cached_notes:
             _feed_source = "error"
-    
+            
     return _cached_notes
 
 @app.route('/')

@@ -186,9 +186,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.meta.source === 'fresh') {
       dot.classList.add('fresh');
       text.textContent = 'Live Feed (Synced)';
+    } else if (state.meta.source === 'db_cache') {
+      dot.classList.add('cached');
+      text.textContent = 'Database Cache';
     } else if (state.meta.source === 'file_cache') {
       dot.classList.add('cached');
-      text.textContent = 'Cached Feed';
+      text.textContent = 'File Cache Fallback';
     } else {
       dot.classList.add('error');
       text.textContent = 'Offline Mode';
