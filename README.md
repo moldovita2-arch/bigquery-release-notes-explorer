@@ -41,6 +41,47 @@ bq-release-notes/
 
 ---
 
+## 🏛️ Architecture & Data Flow
+
+### 1. Server-Side (Python Flask)
+The backend in `app.py` acts as an API proxy and resilient cache manager:
+*   **XML Parsing**: Uses `xml.etree.ElementTree` to load the Atom XML feed, and splits consolidated multi-update dates into individual entries by locating HTML `<h3>` tags with a regular expression.
+*   **Tiered Cache**: Stores feed data in memory for 10 minutes. If the memory cache is expired, it fetches the live feed and updates the local persistent backup file `cache.xml`. If the live fetch fails due to connectivity issues, it automatically falls back to reading `cache.xml`.
+
+### 2. Client-Side (Vanilla JS/CSS/HTML)
+The frontend builds a stateful dashboard using pure web technologies:
+*   **State Control**: `static/js/app.js` holds a single state tree tracking raw notes, user-selected filters, search text, active categories, bookmarks, and sort directions.
+*   **Premium Styles**: `static/css/style.css` manages fluid theme states, layout components, skeletons, responsive designs, and timeline connectors.
+
+### 🔄 Request-Response Sequence (Sync Flow)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Browser as Client (app.js)
+    participant Flask as Backend (app.py)
+    participant Google as Google Cloud Feed
+
+    User->>Browser: Clicks "Sync Live"
+    Note over Browser: 1. Disables button & starts infinite spin<br/>2. Renders skeleton loading cards
+    Browser->>Flask: HTTP GET /api/notes?force=true
+    
+    rect rgb(30, 41, 59)
+        Note over Flask: 3. 'force=true' bypasses cache<br/>4. Requests live XML feed
+        Flask->>Google: GET /feeds/bigquery-release-notes.xml
+        Google-->>Flask: Returns Atom XML (200 OK)
+        Note over Flask: 5. Saves raw XML to cache.xml<br/>6. Splits & parses entries in Python
+        Flask-->>Browser: Returns JSON representation (200 OK)
+    end
+
+    Note over Browser: 7. Receives notes JSON<br/>8. Computes and updates metrics<br/>9. Runs filters & formats HTML timeline cards
+    Note over Browser: 10. Stops spinner & enables button<br/>11. Triggers "Feed synchronized!" toast
+    Browser->>User: Displays fully populated interactive timeline
+```
+
+---
+
 ## 🚀 Getting Started
 
 ### Prerequisites
