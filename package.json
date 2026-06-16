@@ -1,0 +1,23 @@
+{
+  "name": "bigquery-release-notes-explorer",
+  "version": "1.0.0",
+  "description": "A premium, interactive web application to browse, search, bookmark, and tweet Google Cloud BigQuery Release Notes.",
+  "main": "app.py",
+  "scripts": {
+    "start": "python app.py",
+    "format": "npx prettier --write \"static/**/*.{js,css}\" \"templates/**/*.html\"",
+    "lint": "npx eslint static/js/app.js"
+  },
+  "keywords": [
+    "bigquery",
+    "flask",
+    "release-notes",
+    "vanilla-js"
+  ],
+  "author": "moldovita2-arch",
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "prettier": "^3.2.5"
+  }
+}
