@@ -22,12 +22,9 @@ However, looking at the layout, accessibility, and interactive states, several a
 
 ## 🛠️ Actionable Improvement Plan
 
-### 1. Mobile-First Layout Optimization
-*   **Issue**: On screens `<= 1024px`, the left filter panel sits on top of the timeline. The user has to scroll past the search box, tabs, category pills, timeframe selectors, and cache info cards before seeing any release notes.
-*   **Solution**: **Collapsible Filter Drawer / Accordion**.
-    *   Introduce a floating filter bar or sticky header with a "Filter & Sort" toggle button on mobile.
-    *   Place the filters inside a clean, slide-out drawer (`transform: translateX`) or a collapsible accordion panel.
-    *   Keep the timeline feed at the top of the viewport by default on small screens.
+### 1. Mobile-First Layout Optimization (Completed ✅)
+*   **Status**: Fully implemented! Added a responsive toggle button (`#filterToggleBtn`) to the header, a close button (`#closeSidebarBtn`) inside the sidebar, and a dark backdrop overlay (`#sidebarOverlay`) that manages viewport transitions and focus.
+*   **Layout Adaptability**: Viewport dimensions and grid columns automatically scale based on display resolution (e.g., transitions from 2-column sidebar layout to overlay drawer mode at `<= 1024px`, compact two-column statistics grid at `<= 768px`, and icon-only header button actions at `<= 576px` to prevent text overflows).
 
 ### 2. Reactive Category Badges
 *   **Issue**: The category pills show totals computed from the entire feed (e.g. `Feature [24]`). If a user searches for *"BigQuery Omni"* or filters for *"Last 30 Days"*, clicking a pill with a non-zero count might yield an empty timeline because the count didn't update to reflect the search.
